@@ -1,0 +1,352 @@
+import pygame
+import random
+
+# Khởi tạo Pygame
+pygame.init()
+
+# Khởi tạo mixer
+pygame.mixer.init()
+
+# Tải âm thanh
+jump_sound = pygame.mixer.Sound("jump.wav")  # Âm thanh nhảy
+collision_sound = pygame.mixer.Sound("collision.wav")  # Âm thanh va chạm
+background_music = pygame.mixer.Sound("background_music.wav")  # Âm thanh nền
+
+# Bắt đầu phát nhạc nền
+background_music.play(-1)  # Phát nhạc nền lặp lại
+
+# Kích thước màn hình
+WIDTH, HEIGHT = 800, 400
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Game Khủng Long Tập Nhảy")
+
+# Màu sắc
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+PATH_COLOR = (255, 0, 0)  # Màu đường đi
+BACKGROUND_COLOR = (255, 255, 255)  # Màu nền (có thể thay đổi)
+
+# Tốc độ khung hình
+clock = pygame.time.Clock()
+FPS = 60
+
+# Tải hình nền và hình ảnh
+background_image = pygame.image.load("anhnen.jpg")
+background_image = pygame.transform.smoothscale(background_image, (WIDTH, HEIGHT))
+dinosaur_image = pygame.image.load("anhkhunglong.jpg")
+dinosaur_image = pygame.transform.smoothscale(dinosaur_image, (40, 40))
+obstacle_image = pygame.image.load("anhtangda.jpg")
+obstacle_image = pygame.transform.smoothscale(obstacle_image, (40, 40))
+
+# Tạo lớp cho khủng long
+class Dinosaur:
+    def __init__(self):
+        self.image = dinosaur_image
+        self.rect = self.image.get_rect()
+        self.rect.x = 50
+        self.rect.y = HEIGHT - 60
+        self.jump = False
+        self.jump_speed = 10
+        self.gravity = 0.5
+
+    def update(self):
+        if self.jump:
+            self.rect.y -= self.jump_speed
+            self.jump_speed -= self.gravity
+            if self.jump_speed < -10:
+                self.jump = False
+                self.jump_speed = 10
+        else:
+            if self.rect.y < HEIGHT - 60:
+                self.rect.y += self.gravity
+            else:
+                self.rect.y = HEIGHT - 60
+
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
+
+# Tạo lớp cho chướng ngại vật
+class Obstacle:
+    def __init__(self):
+        self.image = obstacle_image
+        self.rect = self.image.get_rect()
+        self.rect.x = WIDTH + random.randint(50, 200)
+        self.rect.y = HEIGHT - 60
+        self.speed = 10
+
+    def update(self):
+        self.rect.x -= self.speed
+        if self.rect.x < 0:
+            self.rect.x = WIDTH + random.randint(50, 200)
+
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
+
+# Tạo lớp cho AI khủng long
+class AI_Dinosaur(Dinosaur):
+    def __init__(self):
+        super().__init__()
+        self.rect.x = 135  # Đặt vị trí khởi đầu của AI ở bên trái khủng long người chơi (tăng thêm 35%)
+
+    def ai_jump(self, obstacles):
+        if obstacles:
+            nearest_obstacle = min(obstacles, key=lambda obs: obs.rect.x)
+            distance_to_obstacle = nearest_obstacle.rect.x - self.rect.x
+            
+            # Điều chỉnh khoảng cách nhảy
+            if distance_to_obstacle < 202.5:  # Nếu chướng ngại vật gần (tăng 35% từ 150)
+                if distance_to_obstacle < 135:  # Nếu chướng ngại vật rất gần (tăng 35% từ 100)
+                    self.jump = True
+                elif distance_to_obstacle < 162  and self.rect.y == HEIGHT - 60:  # Nhảy nếu chướng ngại vật ở khoảng cách vừa (tăng 35% từ 120)
+                    self.jump = True
+
+# Hàm hiển thị màn hình khởi động
+def show_start_screen():
+    font = pygame.font.SysFont("Arial", 48, bold=True)
+    text = font.render("Start", True, BLACK)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 30))
+
+    running = True
+    blink = True
+    blink_timer = 0
+    blink_interval = 500
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if text_rect.collidepoint(event.pos):
+                    running = False
+
+        blink_timer += clock.get_time()
+        if blink_timer >= blink_interval:
+            blink = not blink
+            blink_timer = 0
+
+        # Vẽ màu nền
+        screen.fill(BACKGROUND_COLOR)
+        screen.blit(background_image, (0, 0))
+        
+        if blink:
+            text = font.render("Start", True, BLACK)
+        else:
+            text = font.render("Start", True, (200, 200, 200))
+
+        screen.blit(text, text_rect)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+# Hàm hiển thị lựa chọn chơi với AI
+def show_play_with_ai_option():
+    font = pygame.font.SysFont("Arial", 28)
+    text = font.render("Bạn có muốn tập chơi cùng AI không?", True, BLACK)
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
+
+    yes_text = font.render("Có", True, BLACK)
+    yes_rect = yes_text.get_rect(center=(WIDTH // 2 - 100, HEIGHT // 2 + 100))
+
+    no_text = font.render("Không", True, BLACK)
+    no_rect = no_text.get_rect(center=(WIDTH // 2 + 100, HEIGHT // 2 + 100))
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if yes_rect.collidepoint(event.pos):
+                    return True
+                if no_rect.collidepoint(event.pos):
+                    return False
+
+        screen.fill(BACKGROUND_COLOR)
+        screen.blit(background_image, (0, 0))
+        screen.blit(text, text_rect)
+        screen.blit(yes_text, yes_rect)
+        screen.blit(no_text, no_rect)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+# Hàm hiển thị Game Over
+def show_game_over(score, player_name, high_score, high_score_name):
+    font = pygame.font.Font(None, 74)
+    text = font.render("Game Over", True, BLACK)
+    
+    score_font = pygame.font.SysFont("Arial", 25)
+    score_text = score_font.render(f"Score: {score}", True, BLACK)
+
+    high_score_font = pygame.font.Font(None, 36)
+    high_score_text = high_score_font.render(f"High Score: {high_score_name} {high_score}", True, BLACK)
+
+    play_again_font = pygame.font.SysFont("Arial", 20)
+    play_again_text = play_again_font.render("Press SPACE to Play Again", True, BLACK)
+
+    text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40))
+    score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT - 130))
+    high_score_rect = high_score_text.get_rect(center=(WIDTH // 2, HEIGHT - 100))
+    play_again_rect = play_again_text.get_rect(center=(WIDTH // 2, HEIGHT - 60))
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    running = False
+
+        screen.fill(BACKGROUND_COLOR)
+        screen.blit(background_image, (0, 0))
+        screen.blit(text, text_rect)
+        screen.blit(score_text, score_rect)
+        screen.blit(high_score_text, high_score_rect)
+        screen.blit(play_again_text, play_again_rect)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+# Hàm nhập tên người chơi
+def get_player_name():
+    font = pygame.font.SysFont("Arial", 25)
+    input_box = pygame.Rect(WIDTH // 2 - 100, HEIGHT - 60, 200, 30)
+    color_inactive = pygame.Color('purple')
+    color_active = pygame.Color('dodgerblue2')
+    color = color_inactive
+    active = False
+    text = ''
+    
+    prompt_text = font.render("Nhập tên người chơi:", True, BLACK)
+    prompt_rect = prompt_text.get_rect(center=(WIDTH // 2, HEIGHT - 100))
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if input_box.collidepoint(event.pos):
+                    active = not active
+                else:
+                    active = False
+                color = color_active if active else color_inactive
+            if event.type == pygame.KEYDOWN:
+                if active:
+                    if event.key == pygame.K_RETURN:
+                        running = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        text = text[:-1]
+                    else:
+                        text += event.unicode
+
+        screen.fill(BACKGROUND_COLOR)
+        screen.blit(background_image, (0, 0))
+        screen.blit(prompt_text, prompt_rect)
+        txt_surface = font.render(text, True, color)
+        width = max(200, txt_surface.get_width()+10)
+        input_box.w = width
+        screen.blit(txt_surface, (input_box.x+5, input_box.y+5))
+        pygame.draw.rect(screen, color_inactive, input_box, 2)
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    return text
+
+# Hàm chính
+def main():
+    global score
+    high_score = 0
+    high_score_name = ""
+
+    # Biến để theo dõi vị trí hình nền
+    background_x = 0
+    background_speed = 3  # Tốc độ di chuyển của hình nền (giảm 70% so với tốc độ ban đầu 10)
+
+    while True:
+        obstacles = []
+        obstacle_spawn_time = 0
+
+        show_start_screen()
+
+        player_name = get_player_name()
+        play_with_ai = show_play_with_ai_option()
+
+        dinosaur = Dinosaur()
+        ai_dinosaur = AI_Dinosaur() if play_with_ai else None
+        score = 0
+        running = True
+
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE and dinosaur.rect.y == HEIGHT - 60:
+                        dinosaur.jump = True
+                        jump_sound.play()
+
+            dinosaur.update()
+            if ai_dinosaur:
+                ai_dinosaur.ai_jump(obstacles)
+                ai_dinosaur.update()
+
+            obstacle_spawn_time += 1
+            if obstacle_spawn_time >= 60:
+                obstacle = Obstacle()
+                obstacles.append(obstacle)
+                obstacle_spawn_time = 0
+
+            for obstacle in obstacles:
+                obstacle.update()
+
+            for obstacle in obstacles:
+                if dinosaur.rect.colliderect(obstacle.rect):
+                    collision_sound.play()
+                    if score > high_score:
+                        high_score = score
+                        high_score_name = player_name
+                    show_game_over(score, player_name, high_score, high_score_name)
+                    running = False
+
+                if ai_dinosaur and ai_dinosaur.rect.colliderect(obstacle.rect):
+                    collision_sound.play()
+                    show_game_over(score, "AI", high_score, high_score_name)
+                    running = False
+
+                if obstacle.rect.x + obstacle.rect.width < dinosaur.rect.x:
+                    score += 1
+                    obstacles.remove(obstacle)
+
+            # Cập nhật vị trí hình nền
+            background_x -= background_speed
+            if background_x <= -WIDTH:
+                background_x = 0
+
+            # Vẽ màu nền
+            screen.fill(BACKGROUND_COLOR)
+            screen.blit(background_image, (background_x, 0))
+            screen.blit(background_image, (background_x + WIDTH, 0))  # Vẽ hình nền thứ hai để tạo hiệu ứng liên tục
+
+            pygame.draw.line(screen, PATH_COLOR, (0, HEIGHT - 25), (WIDTH, HEIGHT - 25), 2)
+
+            dinosaur.draw(screen)
+            if ai_dinosaur:
+                ai_dinosaur.draw(screen)
+            for obstacle in obstacles:
+                obstacle.draw(screen)
+
+            font = pygame.font.SysFont("Arial", 20)
+            player_name_text = font.render(player_name, True, BLACK)
+            player_name_rect = player_name_text.get_rect(center=(dinosaur.rect.centerx, dinosaur.rect.top - 20))
+            screen.blit(player_name_text, player_name_rect)
+
+            text = font.render(f"Score: {score}", True, (0, 0, 0))
+            screen.blit(text, (10, 10))
+
+            pygame.display.flip()
+            clock.tick(FPS)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
